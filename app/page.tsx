@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from "react";
 
-function formatDateTimeLocal(date: Date): string {
+function toDateAndTime(date: Date): { date: string; time: string } {
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return {
+    date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    time: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
+  };
 }
 
 function formatResult(date: Date): { date: string; time: string; weekday: string } {
@@ -18,15 +21,27 @@ function formatResult(date: Date): { date: string; time: string; weekday: string
 }
 
 export default function Home() {
-  const [startTime, setStartTime] = useState("");
+  const [dateVal, setDateVal] = useState("");
+  const [timeVal, setTimeVal] = useState("");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setStartTime(formatDateTimeLocal(new Date()));
+    const now = toDateAndTime(new Date());
+    setDateVal(now.date);
+    setTimeVal(now.time);
     setMounted(true);
   }, []);
 
-  const finishDate = startTime ? new Date(new Date(startTime).getTime() + 36 * 60 * 60 * 1000) : null;
+  const resetToNow = () => {
+    const now = toDateAndTime(new Date());
+    setDateVal(now.date);
+    setTimeVal(now.time);
+  };
+
+  const finishDate =
+    dateVal && timeVal
+      ? new Date(new Date(`${dateVal}T${timeVal}`).getTime() + 36 * 60 * 60 * 1000)
+      : null;
   const result = finishDate && !isNaN(finishDate.getTime()) ? formatResult(finishDate) : null;
 
   return (
@@ -40,23 +55,31 @@ export default function Home() {
 
       {/* 入力カード */}
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-md px-6 py-6 mb-6">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <label className="text-xs font-semibold text-blue-400 uppercase tracking-widest">
             いつ仕込む？
           </label>
           <button
-            onClick={() => setStartTime(formatDateTimeLocal(new Date()))}
+            onClick={resetToNow}
             className="text-xs text-sky-500 font-medium bg-sky-50 border border-sky-200 rounded-full px-3 py-1 active:bg-sky-100"
           >
             現在時刻
           </button>
         </div>
-        <input
-          type="datetime-local"
-          value={startTime}
-          onChange={(e) => setStartTime(e.target.value)}
-          className="w-full min-w-0 text-base text-blue-900 font-medium bg-sky-50 border border-sky-200 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-300"
-        />
+        <div className="flex gap-2">
+          <input
+            type="date"
+            value={dateVal}
+            onChange={(e) => setDateVal(e.target.value)}
+            className="flex-1 min-w-0 text-base text-blue-900 font-medium bg-sky-50 border border-sky-200 rounded-2xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-sky-300"
+          />
+          <input
+            type="time"
+            value={timeVal}
+            onChange={(e) => setTimeVal(e.target.value)}
+            className="w-28 min-w-0 text-base text-blue-900 font-medium bg-sky-50 border border-sky-200 rounded-2xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-sky-300"
+          />
+        </div>
       </div>
 
       {/* 矢印 */}
@@ -69,9 +92,7 @@ export default function Home() {
         </p>
         {mounted && result ? (
           <>
-            <p className="text-4xl font-bold text-blue-800">
-              {result.time}
-            </p>
+            <p className="text-4xl font-bold text-blue-800">{result.time}</p>
             <p className="text-xl text-blue-600 mt-1">
               {result.date} <span className="text-blue-400">{result.weekday}</span>
             </p>
