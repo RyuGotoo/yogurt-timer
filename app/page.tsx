@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from "react";
 
+const STORAGE_KEY = "yogurtBatchStart";
+const FERMENT_MS = 36 * 60 * 60 * 1000;
+const NEXT_START_MS = 96 * 60 * 60 * 1000;
+
 function toDateAndTime(date: Date): { date: string; time: string } {
   const pad = (n: number) => String(n).padStart(2, "0");
   return {
@@ -20,29 +24,90 @@ function formatResult(date: Date): { date: string; time: string; weekday: string
   };
 }
 
+function formatDatetime(date: Date): string {
+  const f = formatResult(date);
+  return `${f.date} ${f.weekday} ${f.time}`;
+}
+
 export default function Home() {
   const [dateVal, setDateVal] = useState("");
   const [timeVal, setTimeVal] = useState("");
+  const [batchDateVal, setBatchDateVal] = useState("");
+  const [batchTimeVal, setBatchTimeVal] = useState("");
   const [mounted, setMounted] = useState(false);
+  const [now, setNow] = useState<Date>(new Date());
 
   useEffect(() => {
-    const now = toDateAndTime(new Date());
-    setDateVal(now.date);
-    setTimeVal(now.time);
+    const current = toDateAndTime(new Date());
+    setDateVal(current.date);
+    setTimeVal(current.time);
+
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const dt = toDateAndTime(new Date(saved));
+      setBatchDateVal(dt.date);
+      setBatchTimeVal(dt.time);
+    } else {
+      setBatchDateVal(current.date);
+      setBatchTimeVal(current.time);
+    }
+
     setMounted(true);
+    const interval = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const resetToNow = () => {
-    const now = toDateAndTime(new Date());
-    setDateVal(now.date);
-    setTimeVal(now.time);
+    const current = toDateAndTime(new Date());
+    setDateVal(current.date);
+    setTimeVal(current.time);
   };
 
+  const resetBatchToNow = () => {
+    const current = toDateAndTime(new Date());
+    setBatchDateVal(current.date);
+    setBatchTimeVal(current.time);
+    localStorage.setItem(STORAGE_KEY, new Date().toISOString());
+  };
+
+  const handleBatchDateChange = (val: string) => {
+    setBatchDateVal(val);
+    if (val && batchTimeVal) {
+      const d = new Date(`${val}T${batchTimeVal}`);
+      if (!isNaN(d.getTime())) localStorage.setItem(STORAGE_KEY, d.toISOString());
+    }
+  };
+
+  const handleBatchTimeChange = (val: string) => {
+    setBatchTimeVal(val);
+    if (batchDateVal && val) {
+      const d = new Date(`${batchDateVal}T${val}`);
+      if (!isNaN(d.getTime())) localStorage.setItem(STORAGE_KEY, d.toISOString());
+    }
+  };
+
+  // タイマー計算（上部カード）
   const finishDate =
     dateVal && timeVal
-      ? new Date(new Date(`${dateVal}T${timeVal}`).getTime() + 36 * 60 * 60 * 1000)
+      ? new Date(new Date(`${dateVal}T${timeVal}`).getTime() + FERMENT_MS)
       : null;
   const result = finishDate && !isNaN(finishDate.getTime()) ? formatResult(finishDate) : null;
+
+  // バッチ管理計算
+  const batchStartTime =
+    batchDateVal && batchTimeVal ? new Date(`${batchDateVal}T${batchTimeVal}`) : null;
+  const validBatch = batchStartTime && !isNaN(batchStartTime.getTime());
+
+  const batchReady = validBatch ? new Date(batchStartTime!.getTime() + FERMENT_MS) : null;
+  const eatBy = validBatch ? new Date(batchStartTime!.getTime() + FERMENT_MS + 4 * 24 * 60 * 60 * 1000) : null;
+  const nextStart = validBatch ? new Date(batchStartTime!.getTime() + NEXT_START_MS) : null;
+  const nextReady = validBatch ? new Date(batchStartTime!.getTime() + NEXT_START_MS + FERMENT_MS) : null;
+
+  const isReady = batchReady ? now >= batchReady : false;
+  const nextStartOverdue = nextStart ? now >= nextStart : false;
+
+  const remainingMs = batchReady && !isReady ? batchReady.getTime() - now.getTime() : 0;
+  const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000));
 
   return (
     <main className="min-h-screen bg-linear-to-b from-sky-50 to-blue-100 flex flex-col items-center justify-center px-6 py-12">
@@ -86,7 +151,7 @@ export default function Home() {
       <div className="text-3xl text-sky-400 mb-6">↓</div>
 
       {/* 結果カード */}
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-md px-6 py-6 text-center">
+      <div className="w-full max-w-sm bg-white rounded-3xl shadow-md px-6 py-6 text-center mb-10">
         <p className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-4">
           できあがりは…
         </p>
@@ -101,6 +166,78 @@ export default function Home() {
           <p className="text-blue-300 text-lg">──</p>
         )}
       </div>
+
+      {/* バッチ管理カード */}
+      {mounted && (
+        <div className="w-full max-w-sm bg-white rounded-3xl shadow-md px-6 py-6">
+          <p className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-4">
+            バッチ管理
+          </p>
+
+          {/* 仕込み日時入力 */}
+          <div className="flex items-center justify-between mb-3">
+            <label className="text-xs font-semibold text-blue-400 uppercase tracking-widest">
+              直近で仕込んだのは？
+            </label>
+            <button
+              onClick={resetBatchToNow}
+              className="text-xs text-sky-500 font-medium bg-sky-50 border border-sky-200 rounded-full px-3 py-1 active:bg-sky-100"
+            >
+              現在時刻
+            </button>
+          </div>
+          <div className="flex gap-2 mb-5">
+            <input
+              type="date"
+              value={batchDateVal}
+              onChange={(e) => handleBatchDateChange(e.target.value)}
+              className="flex-1 min-w-0 text-base text-blue-900 font-medium bg-sky-50 border border-sky-200 rounded-2xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-sky-300"
+            />
+            <input
+              type="time"
+              value={batchTimeVal}
+              onChange={(e) => handleBatchTimeChange(e.target.value)}
+              className="w-28 min-w-0 text-base text-blue-900 font-medium bg-sky-50 border border-sky-200 rounded-2xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-sky-300"
+            />
+          </div>
+
+          {/* 結果テーブル */}
+          {validBatch ? (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm py-2 border-b border-sky-50">
+                <span className="text-blue-400">完成</span>
+                <span className={`font-medium ${isReady ? "text-green-600" : "text-blue-800"}`}>
+                  {batchReady && formatDatetime(batchReady)}
+                  {isReady ? " ✅" : ` ⏳ あと${remainingHours}h`}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm py-2 border-b border-sky-50">
+                <span className="text-blue-400">食べ終わる</span>
+                <span className="text-blue-800 font-medium">
+                  {eatBy && formatDatetime(eatBy)}
+                </span>
+              </div>
+              <div className={`flex justify-between text-sm py-2 border-b border-sky-50`}>
+                <span className={nextStartOverdue ? "text-orange-500 font-semibold" : "text-blue-400"}>
+                  次の仕込み
+                  {nextStartOverdue && " ⚠️"}
+                </span>
+                <span className={`font-medium ${nextStartOverdue ? "text-orange-600" : "text-blue-800"}`}>
+                  {nextStart && formatDatetime(nextStart)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm py-2">
+                <span className="text-blue-400">次のバッチ完成</span>
+                <span className="text-blue-800 font-medium">
+                  {nextReady && formatDatetime(nextReady)}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-center text-blue-300 text-sm">日時を入力してください</p>
+          )}
+        </div>
+      )}
 
       <p className="mt-10 text-xs text-blue-400">おいしくなるまで、36時間 🍶</p>
     </main>
