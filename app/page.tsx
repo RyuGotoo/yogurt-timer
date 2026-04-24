@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 
-const STORAGE_KEY = "yogurtBatchStart";
+const STORAGE_KEY_DATE = "yogurtBatchDate";
+const STORAGE_KEY_TIME = "yogurtBatchTime";
 const FERMENT_MS = 36 * 60 * 60 * 1000;
 const NEXT_START_MS = 96 * 60 * 60 * 1000;
 
@@ -42,20 +43,21 @@ export default function Home() {
     setDateVal(current.date);
     setTimeVal(current.time);
 
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const dt = toDateAndTime(new Date(saved));
-      setBatchDateVal(dt.date);
-      setBatchTimeVal(dt.time);
-    } else {
-      setBatchDateVal(current.date);
-      setBatchTimeVal(current.time);
-    }
+    const savedDate = localStorage.getItem(STORAGE_KEY_DATE);
+    const savedTime = localStorage.getItem(STORAGE_KEY_TIME);
+    setBatchDateVal(savedDate ?? current.date);
+    setBatchTimeVal(savedTime ?? current.time);
 
     setMounted(true);
     const interval = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    localStorage.setItem(STORAGE_KEY_DATE, batchDateVal);
+    localStorage.setItem(STORAGE_KEY_TIME, batchTimeVal);
+  }, [batchDateVal, batchTimeVal, mounted]);
 
   const resetToNow = () => {
     const current = toDateAndTime(new Date());
@@ -67,23 +69,6 @@ export default function Home() {
     const current = toDateAndTime(new Date());
     setBatchDateVal(current.date);
     setBatchTimeVal(current.time);
-    localStorage.setItem(STORAGE_KEY, new Date().toISOString());
-  };
-
-  const handleBatchDateChange = (val: string) => {
-    setBatchDateVal(val);
-    if (val && batchTimeVal) {
-      const d = new Date(`${val}T${batchTimeVal}`);
-      if (!isNaN(d.getTime())) localStorage.setItem(STORAGE_KEY, d.toISOString());
-    }
-  };
-
-  const handleBatchTimeChange = (val: string) => {
-    setBatchTimeVal(val);
-    if (batchDateVal && val) {
-      const d = new Date(`${batchDateVal}T${val}`);
-      if (!isNaN(d.getTime())) localStorage.setItem(STORAGE_KEY, d.toISOString());
-    }
   };
 
   // タイマー計算（上部カード）
@@ -190,13 +175,13 @@ export default function Home() {
             <input
               type="date"
               value={batchDateVal}
-              onChange={(e) => handleBatchDateChange(e.target.value)}
+              onChange={(e) => setBatchDateVal(e.target.value)}
               className="flex-1 min-w-0 text-base text-blue-900 font-medium bg-sky-50 border border-sky-200 rounded-2xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-sky-300"
             />
             <input
               type="time"
               value={batchTimeVal}
-              onChange={(e) => handleBatchTimeChange(e.target.value)}
+              onChange={(e) => setBatchTimeVal(e.target.value)}
               className="w-28 min-w-0 text-base text-blue-900 font-medium bg-sky-50 border border-sky-200 rounded-2xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-sky-300"
             />
           </div>
