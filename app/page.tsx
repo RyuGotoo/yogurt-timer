@@ -35,6 +35,7 @@ export default function Home() {
   const [timeVal, setTimeVal] = useState("");
   const [batchDateVal, setBatchDateVal] = useState("");
   const [batchTimeVal, setBatchTimeVal] = useState("");
+  const [savedBatch, setSavedBatch] = useState<{ date: string; time: string } | null>(null);
   const [mounted, setMounted] = useState(false);
   const [now, setNow] = useState<Date>(new Date());
 
@@ -45,19 +46,37 @@ export default function Home() {
 
     const savedDate = localStorage.getItem(STORAGE_KEY_DATE);
     const savedTime = localStorage.getItem(STORAGE_KEY_TIME);
-    setBatchDateVal(savedDate ?? current.date);
-    setBatchTimeVal(savedTime ?? current.time);
+    if (savedDate && savedTime) {
+      setBatchDateVal(savedDate);
+      setBatchTimeVal(savedTime);
+      setSavedBatch({ date: savedDate, time: savedTime });
+    } else {
+      setBatchDateVal(current.date);
+      setBatchTimeVal(current.time);
+    }
 
     setMounted(true);
     const interval = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    if (!mounted) return;
+  const saveBatch = () => {
     localStorage.setItem(STORAGE_KEY_DATE, batchDateVal);
     localStorage.setItem(STORAGE_KEY_TIME, batchTimeVal);
-  }, [batchDateVal, batchTimeVal, mounted]);
+    setSavedBatch({ date: batchDateVal, time: batchTimeVal });
+  };
+
+  const resetBatch = () => {
+    if (savedBatch) {
+      setBatchDateVal(savedBatch.date);
+      setBatchTimeVal(savedBatch.time);
+    }
+  };
+
+  const isDirty =
+    savedBatch === null ||
+    batchDateVal !== savedBatch.date ||
+    batchTimeVal !== savedBatch.time;
 
   const resetToNow = () => {
     const current = toDateAndTime(new Date());
@@ -65,7 +84,7 @@ export default function Home() {
     setTimeVal(current.time);
   };
 
-  const resetBatchToNow = () => {
+  const setBatchToNow = () => {
     const current = toDateAndTime(new Date());
     setBatchDateVal(current.date);
     setBatchTimeVal(current.time);
@@ -165,13 +184,13 @@ export default function Home() {
               直近で仕込んだのは？
             </label>
             <button
-              onClick={resetBatchToNow}
+              onClick={setBatchToNow}
               className="text-xs text-sky-500 font-medium bg-sky-50 border border-sky-200 rounded-full px-3 py-1 active:bg-sky-100"
             >
               現在時刻
             </button>
           </div>
-          <div className="flex gap-2 mb-5">
+          <div className="flex gap-2 mb-3">
             <input
               type="date"
               value={batchDateVal}
@@ -184,6 +203,22 @@ export default function Home() {
               onChange={(e) => setBatchTimeVal(e.target.value)}
               className="w-28 min-w-0 text-base text-blue-900 font-medium bg-sky-50 border border-sky-200 rounded-2xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-sky-300"
             />
+          </div>
+          <div className="flex gap-2 mb-5">
+            <button
+              onClick={saveBatch}
+              disabled={!isDirty}
+              className="flex-1 text-sm font-semibold bg-sky-500 hover:bg-sky-600 active:bg-sky-700 disabled:bg-sky-200 disabled:text-sky-400 text-white rounded-2xl px-4 py-2 transition-colors"
+            >
+              保存
+            </button>
+            <button
+              onClick={resetBatch}
+              disabled={!isDirty || savedBatch === null}
+              className="flex-1 text-sm font-medium border border-sky-200 text-sky-500 hover:bg-sky-50 active:bg-sky-100 disabled:text-sky-200 disabled:border-sky-100 rounded-2xl px-4 py-2 transition-colors"
+            >
+              リセット
+            </button>
           </div>
 
           {/* 結果テーブル */}
